@@ -1,80 +1,62 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import seaborn as sns
-import openai
-# from config import OPENAI_API_KEY
-import os
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+import matplotlib.pyplot as plt
 
-# OpenAI API key set karo
-openai.api_key = OPENAI_API_KEY
+# Dark theme for Seaborn/Matplotlib
+plt.style.use("dark_background")
+sns.set_palette("bright")
 
-st.title("📊 AI-Powered Excel Chatbot")
+# Page setup
+st.set_page_config(page_title="Excel AI Dashboard", layout="wide")
 
-# Excel file upload karo
-uploaded_file = st.file_uploader("Upload Excel File (xlsx or csv)", type=["xlsx", "csv"])
+st.markdown("<h1 style='color:#00FFAA;'>📊 Excel AI Dashboard</h1>", unsafe_allow_html=True)
 
-# User ka question input lo
-user_question = st.text_input("Ask a question about your data:")
+# File uploader
+uploaded_file = st.file_uploader("📤 Upload CSV or Excel", type=["csv", "xlsx"])
 
-if uploaded_file:
-    # Excel ya CSV file ko read karo
-    try:
-        if uploaded_file.name.endswith("xlsx"):
-            df = pd.read_excel(uploaded_file)
-        else:
-            df = pd.read_csv(uploaded_file)
-    except Exception as e:
-        st.error(f"Error reading file: {e}")
+if uploaded_file is not None:
+    if uploaded_file.name.endswith('.csv'):
+        df = pd.read_csv(uploaded_file)
     else:
-        st.write("### 📋 Data Preview:")
-        st.write(df.head())  # First 5 rows dikhao
+        df = pd.read_excel(uploaded_file)
 
-        # Dashboard generate karo: Scatter plot & Histogram
-        st.write("### 📊 Dashboard:")
-        numeric_cols = df.select_dtypes(include=['number']).columns
+    st.markdown("### 🧾 Data Preview")
+    st.dataframe(df.head())
 
-        if len(numeric_cols) >= 2:
-            fig, ax = plt.subplots(figsize=(6, 4))
-            sns.scatterplot(x=df[numeric_cols[0]], y=df[numeric_cols[1]], ax=ax)
-            st.pyplot(fig)
-        elif len(numeric_cols) > 0:
-            fig, ax = plt.subplots(figsize=(6, 4))
-            sns.histplot(df[numeric_cols[0]], kde=True, ax=ax)
-            st.pyplot(fig)
-        else:
-            st.info("No numeric data available for dashboard charts.")
+    numeric_cols = df.select_dtypes(include='number').columns.tolist()
 
-        # AI Summary generation using ChatGPT API
-        def generate_summary(data):
-            prompt = f"Analyze this data and provide key insights:\n{data.head().to_string()}"
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are a data analyst."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            return response['choices'][0]['message']['content']
+    if len(numeric_cols) >= 2:
+        st.markdown("### 📊 Chart Generator")
 
-        st.write("### 📝 Summary:")
-        summary = generate_summary(df)
-        st.write(summary)
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            chart_type = st.selectbox("Choose Chart Type", ["Bar", "Line", "Scatter", "Heatmap"])
+        with col2:
+            x_axis = st.selectbox("Select X-axis", numeric_cols, index=0)
+        with col3:
+            y_axis = st.selectbox("Select Y-axis", numeric_cols, index=1)
 
-        # AI Chatbot: User ke question ka jawab data ke context mein
-        def ask_chatgpt(question, data):
-            prompt = f"Data:\n{data.head().to_string()}\n\nUser question: {question}"
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are a data analyst."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            return response['choices'][0]['message']['content']
+        fig, ax = plt.subplots(figsize=(10, 5))
+        
+        if chart_type == "Bar":
+            sns.barplot(data=df, x=x_axis, y=y_axis, ax=ax)
+        elif chart_type == "Line":
+            sns.lineplot(data=df, x=x_axis, y=y_axis, ax=ax)
+        elif chart_type == "Scatter":
+            sns.scatterplot(data=df, x=x_axis, y=y_axis, ax=ax)
+        elif chart_type == "Heatmap":
+            corr = df[numeric_cols].corr()
+            sns.heatmap(corr, annot=True, cmap="viridis", ax=ax)
 
-        if user_question:
-            st.write("### 🤖 AI Response:")
-            answer = ask_chatgpt(user_question, df)
-            st.write(answer)
+        ax.set_title(f"{chart_type} Plot: {x_axis} vs {y_axis}", color='cyan')
+        st.pyplot(fig)
+
+        st.markdown("### 📈 Summary Stats")
+        st.write(df[numeric_cols].describe().style.background_gradient(cmap='viridis'))
+
+    else:
+        st.warning("⚠️ At least 2 numeric columns required for visualization.")
+
+else:
+    st.info("📁 Upload a dataset to get started.")
